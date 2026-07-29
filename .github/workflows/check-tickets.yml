@@ -1,0 +1,77 @@
+name: Check Cineplex tickets
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Restore notification state
+        id: notification-state
+        uses: actions/cache/restore@v4
+        with:
+          path: .notification-state
+          key: cineplex-2-aug-2026-alerted-v1
+
+      - name: Check all Cineplex locations
+        id: tickets
+        env:
+          TARGET_DATE: "2 Aug"
+        run: npm run check
+
+      - name: Notify Discord
+        if: steps.tickets.outputs.found == 'true' && steps.notification-state.outputs.cache-hit != 'true'
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          LOCATIONS: ${{ steps.tickets.outputs.locations }}
+        run: |
+          node -e '
+            const url = process.env.DISCORD_WEBHOOK_URL;
+            if (!url) throw new Error("DISCORD_WEBHOOK_URL is not configured");
+            const content = [
+              "🎟️ **Star Cineplex tickets for 2 August 2026 are now available!**",
+              `Locations detected: ${process.env.LOCATIONS}`,
+              "Book here: https://ticket.cineplexbd.com/home"
+            ].join("\n");
+            fetch(url, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ content })
+            }).then((response) => {
+              if (!response.ok) throw new Error(`Discord returned ${response.status}`);
+            });
+          '
+
+      - name: Mark notification as sent
+        if: steps.tickets.outputs.found == 'true' && steps.notification-state.outputs.cache-hit != 'true'
+        run: mkdir -p .notification-state && date -u > .notification-state/sent.txt
+
+      - name: Save notification state
+        if: steps.tickets.outputs.found == 'true' && steps.notification-state.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .notification-state
+          key: cineplex-2-aug-2026-alerted-v1
