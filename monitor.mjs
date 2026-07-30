@@ -2,6 +2,7 @@ import { chromium } from "playwright";
 
 const TARGET_DATE = process.env.TARGET_DATE || "2 Aug";
 const SITE_URL = "https://ticket.cineplexbd.com/home";
+const MAX_ATTEMPTS = 3;
 
 const THEATRES = [
   "Bashundhara Shopping Mall, Panthapath",
@@ -18,7 +19,7 @@ const THEATRES = [
 const escapeRegex = (value) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-async function checkTheatre(browser, theatre) {
+async function checkTheatreOnce(browser, theatre) {
   const page = await browser.newPage();
 
   try {
@@ -32,12 +33,13 @@ async function checkTheatre(browser, theatre) {
       exact: true
     });
 
-    if (await guestLogin.isVisible()) {
-      await guestLogin.click();
-    }
+    await guestLogin.waitFor({ state: "visible", timeout: 20_000 });
+    await guestLogin.click();
 
-    const theatreChoice = page.getByText(theatre, { exact: true });
-    await theatreChoice.waitFor({ state: "visible", timeout: 20_000 });
+    // The Cineplex card includes the address in the same element as the theatre
+    // name, so an exact-text locator never matches even though the name is shown.
+    const theatreChoice = page.getByText(theatre);
+    await theatreChoice.waitFor({ state: "visible", timeout: 30_000 });
     await theatreChoice.click();
 
     await page
@@ -52,15 +54,33 @@ async function checkTheatre(browser, theatre) {
       available: datePattern.test(pageText),
       error: null
     };
-  } catch (error) {
-    return {
-      theatre,
-      available: false,
-      error: error instanceof Error ? error.message : String(error)
-    };
   } finally {
     await page.close();
   }
+}
+
+async function checkTheatre(browser, theatre) {
+  let lastError;
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    try {
+      return await checkTheatreOnce(browser, theatre);
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+
+      if (attempt < MAX_ATTEMPTS) {
+        console.warn(
+          `Retrying ${theatre} after attempt ${attempt} failed — ${lastError}`
+        );
+      }
+    }
+  }
+
+  return {
+    theatre,
+    available: false,
+    error: `Failed after ${MAX_ATTEMPTS} attempts — ${lastError}`
+  };
 }
 
 const browser = await chromium.launch({ headless: true });
