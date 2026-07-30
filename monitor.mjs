@@ -238,6 +238,14 @@ try {
   const message = errorMessage(error);
   console.error(message);
 
+  if (process.env.GITHUB_ACTIONS === "true") {
+    const annotation = message
+      .replace(/%/g, "%25")
+      .replace(/\r/g, "%0D")
+      .replace(/\n/g, "%0A");
+    console.error(`::error title=Cineplex monitor failure::${annotation}`);
+  }
+
   if (process.env.GITHUB_STEP_SUMMARY) {
     const fs = await import("node:fs");
     fs.appendFileSync(
