@@ -234,6 +234,26 @@ try {
     console.error("Every theatre check failed.");
     process.exitCode = 1;
   }
+} catch (error) {
+  const message = errorMessage(error);
+  console.error(message);
+
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    const fs = await import("node:fs");
+    fs.appendFileSync(
+      process.env.GITHUB_STEP_SUMMARY,
+      [
+        "## Cineplex monitor failure",
+        "",
+        "```text",
+        message.replace(/```/g, "'''"),
+        "```",
+        ""
+      ].join("\n")
+    );
+  }
+
+  process.exitCode = 1;
 } finally {
   await context?.close();
   await browser.close();
