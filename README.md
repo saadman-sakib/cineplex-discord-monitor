@@ -1,6 +1,6 @@
 # Star Cineplex ticket monitor
 
-This GitHub Actions project checks every listed Star Cineplex theatre every five
+This GitHub Actions project checks every listed Star Cineplex theatre every ten
 minutes. It sends one Discord notification when **2 August 2026** becomes
 available, then records that the notification was sent to avoid repeated alerts.
 

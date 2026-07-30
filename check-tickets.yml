@@ -1,9 +1,16 @@
 name: Check Cineplex tickets
 
 on:
+  push:
+    branches:
+      - main
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "2,12,22,32,42,52 * * * *"
   workflow_dispatch:
+
+concurrency:
+  group: cineplex-ticket-check
+  cancel-in-progress: true
 
 permissions:
   contents: read
